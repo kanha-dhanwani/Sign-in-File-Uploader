@@ -9,6 +9,10 @@ const session = require('express-session');
 require('./passport-setup');
 const cors = require('cors');
 
+
+
+const s3Controller = require('./s3-controller');
+
 app.set('view engine','ejs')
 app.set('views', path.join(__dirname, 'views'));
 
@@ -27,7 +31,7 @@ function isLoggedIn(req, res, next) {
     next();
   } else {
     // If not authenticated, redirect to the login page or return an error
-    res.redirect('/login');
+    res.redirect('/');
   }
 }
 
@@ -35,6 +39,7 @@ function isLoggedIn(req, res, next) {
 // Initializes passport and passport sessions
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(express.static(__dirname));
 
 // Example protected and unprotected routes
 app.get('/', (req, res) => res.render('pages/index'))
@@ -64,7 +69,12 @@ app.get('/google/callback', passport.authenticate('google', { failureRedirect: '
 
 app.get('pages/profile', (req, res) => {
   // Your logic to handle the /profile request goes here
-  res.render('pages/profile');
+  res.render('/');
+});
+
+app.get('/successful-upload', (req, res) => {
+      // Set a custom response header to instruct the client to reload the page
+      res.setHeader('X-Reload-Page', 'true');
 });
 
 
@@ -76,6 +86,7 @@ app.get('/logout', (req, res) => {
 
 
 app.listen(5000, () => console.log(`Example app listening on port ${5000}!`))
+
 
 app.use(cors());
 // Configure AWS credentials (Set these as environment variables)
@@ -96,7 +107,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Handle file uploads
-app.post('/upload', upload.single('file'), async (req, res) => {
+app.post('/upload-to-s3', upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
 
@@ -107,7 +118,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       Body: file.buffer,
     };
 
-    const uploadedFile = await s3.upload(params).promise();
+    const uploadedFile = await s3.upload(params).promise(); //To push file on aws
     const uploadedFiles = []; // Store the uploaded file details in an array
 
     // Optionally, you can store the uploaded file details (e.g., URL, key) in your database
@@ -116,8 +127,13 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       url: uploadedFile.Location, // The URL of the uploaded file in S3
     });
 
-    res.redirect('/');
     
+    // console.log('Upload Successful');
+    location.url('profile');
+    // app.get('/files', (req, res) => {
+    //   res.json(fileList);
+    // });
+
   } catch (err) {
     console.error('Error during file upload:', err);
     res.status(500).send('Oops! Something went wrong during file upload.');
@@ -125,44 +141,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 
-// Function to list uploaded files for a user account
-async function listUploadedFilesForUser(userId) {
-  try {
-    // Retrieve file information from your application's database based on userId
-    const userUploadedFiles = await YourDatabaseFunction.getUserUploadedFiles(userId);
 
-    // Array to store the file keys (file names or unique identifiers) associated with the user
-    const fileKeys = userUploadedFiles.map((file) => file.key);
+// app.post('/upload-to-s3', upload.single('file'), s3Controller.s3Upload);
 
-    // Use the AWS SDK to list objects in the S3 bucket
-    const bucketName = 'your-s3-bucket-name';
-    const listObjectsParams = {
-      Bucket: bucketName,
-      Prefix: 'user_uploads/' + userId + '/', // Assuming you have a specific prefix for each user's uploads
-    };
+app.get('/all-files', s3Controller.s3Get);
 
-    const s3Response = await s3.listObjectsV2(listObjectsParams).promise();
-    const uploadedFiles = s3Response.Contents;
-
-    // Filter the files to only include those associated with the user
-    const userFiles = uploadedFiles.filter((file) => fileKeys.includes(file.Key));
-
-    // Return the list of files associated with the user
-    return userFiles;
-  } catch (err) {
-    console.error('Error listing uploaded files:', err);
-    throw err;
-  }
-}
-
-// Example usage:
-const userId = req.session.userId; // Replace this with the actual user ID of the logged-in user
-listUploadedFilesForUser(userId)
-  .then((userFiles) => {
-    console.log('Uploaded files for the user:');
-    console.log(userFiles);
-  })
-  .catch((err) => {
-    console.error('Error:', err);
-  });
-
+app.get('/get-object-url/:key', s3Controller.getSignedUrl);
