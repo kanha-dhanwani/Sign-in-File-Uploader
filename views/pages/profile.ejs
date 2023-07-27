@@ -1,1 +1,176 @@
+<!doctype html>
+<html>
+<head>
+    <title>Google Authentication & Uploader</title>
+    <style>
+        .card {
+            border: 1px solid #eee;
+            border-radius: 3px;
+            background-color: #fff;
+            cursor: pointer;
+            display: inline-block;
+            width: 30%;
+            margin: 1.5%;
+            padding: 20px;
+            box-shadow: 1px 1px 3px #999;
+        }
+    </style>
+</head>
+<body onload="loadData()">
+    <div class="container">
+        <h1>Upload Files</h1>
+        
+        <form id="uploadForm" action="/upload-to-s3" method="post" enctype="multipart/form-data">
+        <!-- <input type="file" name="file" multiple> -->
+        <input type="file" id="s3-file" name="file" onchange="saveFile(this)">
+        <button type="submit" onclick="uploadFile()">Upload</button>
+        </form>
+    </div> 
 
+        <div id="container">
+            <h4>Bucket Data</h4>
+            <div id="bucket-data-list">
+        </div>
+        </div>
+
+    <script>
+
+        // const form = document.getElementById('uploadForm');
+        // form.addEventListener('submit', function (event) {
+        //     event.preventDefault(); 
+        //     const formData = new FormData(form);
+        //     const xhr = new XMLHttpRequest();
+
+        //     xhr.addEventListener('load', function () {
+        //     if (xhr.status === 200) {
+        //         console.log('File uploaded successfully.');
+        //         window.location.reload(); // Reload the page after the successful upload
+        //     } else {
+        //         console.error('Error uploading file:', xhr.status);
+        //         // Handle error scenarios as needed
+        //     }
+        //     });
+        //       xhr.open('POST', '/upload');
+        //       xhr.send(formData);
+        // });
+
+  function saveFile(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+
+    if (!file) {
+      console.log('No file selected.');
+      return;
+    }
+
+    const reader = new FileReader();
+
+    // Add an event listener to handle the 'load' event when the file is read
+    reader.addEventListener('load', (event) => {
+      // 'event.target.result' contains the file content as a data URL
+      const fileContent = event.target.result;
+      console.log('File content:', fileContent);
+      // You can now use 'fileContent' here, after it has been loaded
+      // (e.g., send it to the server using XMLHttpRequest or fetch API)
+      // ...
+    });
+
+    // Add an event listener to handle the 'error' event if reading the file fails
+    reader.addEventListener('error', (event) => {
+      console.error('Error reading the file:', event.error);
+      // Handle the error here if needed.
+    });
+
+    // Start reading the file as a data URL
+    reader.readAsDataURL(file);
+  }
+        // let list = [];
+        // function saveFile(event) {
+        //     const xhr = new XMLHttpRequest();
+        //     const formData = new FormData();
+        //     const file = event.files[0];
+        //     formData.append('s3-file', file);
+
+        //     xhr.onreadystatechange = (state) => {
+        //         if(xhr.readyState === XMLHttpRequest.DONE) {
+        //         }
+        //     }
+
+        //     xhr.timeout = 5000;
+        //     xhr.open('POST', '/upload-to-s3');
+        //     xhr.send(formData);
+        //     // Assuming the XMLHttpRequest or fetch code from the previous example
+        //     fetch('/upload-to-s3', {
+        //     method: 'POST',
+        //     body: formData,
+        //     })
+        //     .then((response) => {
+        //     if (response.headers.get('X-Reload-Page') === 'true') {
+        //     // Reload the page if the custom header is present
+        //     window.location.reload();
+        //     }
+        //     return response.text();
+        //     })
+        //     .then((message) => {
+        //     console.log(message); // Log the response message from the server
+        //     })
+        //     .catch((error) => {
+        //     console.error('Error uploading file:', error);
+        //     // Handle the error here (e.g., display an error message to the user)
+        //     });
+
+        //     fileInput.addEventListener('change', saveFile);
+        // }
+
+        function uploadFile() {
+            saveFile();
+        }
+
+
+        function loadData() {
+            getBucketObjectList();
+        }
+
+        function getBucketObjectList() {
+            getData('/all-files', (data = []) => {
+                data = JSON.parse(data);
+                list = data;
+                const objectList = data.map((item, index) => {
+                    return `
+                        <div class="card" onclick="downloadFile(${index})">
+                            File Name: ${item.key} </br>
+                            File Size: ${item.size} </br>
+                            File Modified: ${item.lastModified}
+                        </div>
+                    `
+                });
+                document.getElementById('bucket-data-list').innerHTML = objectList;
+            });
+        }
+
+        function downloadFile(index) {
+            const fileName = (list[index] || {}).key;
+            getData(`/get-object-url/${fileName}`, (url) => {
+                window.open(url, '_blank');
+            });
+        }
+
+
+        function getData(url, cb) {
+            const xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = state => {
+                if(xhr.readyState === XMLHttpRequest.DONE) {
+                    cb(xhr.responseText);
+                }
+            }
+            xhr.timeout = 10000;
+            xhr.open('GET', url);
+            xhr.send();
+        }
+    </script>
+        
+</div>
+<a href="/logout" class="btn btn-default btn-sm">Logout</a>
+</div>
+</body>
+</html>
