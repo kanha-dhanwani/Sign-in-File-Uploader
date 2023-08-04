@@ -10,129 +10,102 @@ require('./passport-setup');
 const cors = require('cors');
 
 
-
-const s3Controller = require('./s3-controller');
-
-app.set('view engine','ejs')
+app.set('view engine', 'ejs')
 app.set('views', path.join(__dirname, 'views'));
 
 
-// Use express-session middleware with your desired configuration
 app.use(session({
   secret: 'your_secret_key',
   resave: false,
   saveUninitialized: false,
 }));
-
-function isLoggedIn(req, res, next) {
-  // Check if the user is authenticated
-  if (req.session.isAuthenticated) {
-    // If authenticated, proceed to the next middleware or route handler
-    next();
-  } else {
-    // If not authenticated, redirect to the login page or return an error
-    res.redirect('/');
-  }
-}
-
-
-// Initializes passport and passport sessions
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.static(__dirname));
+app.use(cors());
+
 
 // Example protected and unprotected routes
 app.get('/', (req, res) => res.render('pages/index'))
+
 app.get('/failed', (req, res) => res.send('You Failed to log in!'))
-
-// In this route you can see that if the user is logged in u can acess his info in: req.user
-app.get('/index', isLoggedIn, (req, res) =>{
-    res.render('pages/profile',{name:req.user.displayName,pic:req.user.photos[0].value,email:req.user.emails[0].value})
-})
-
-
 
 // Auth Routes
 app.get('/google', passport.authenticate('google', { scope: ['profile'], callbackURL: 'http://localhost:5000/google/callback' }));
 
 app.get('/google/callback', passport.authenticate('google', { failureRedirect: '/' }), async (req, res) => {
+  const username = req.user.id;
+  app.locals.username = username;
   req.session.regenerate((err) => {
     // Handle the regeneration callback (if needed)
     if (err) {
       console.error('Error regenerating session:', err);
     }
-    // Redirect or respond to the login success
-    res.render('pages/profile');
+
+    res.redirect(`/profile/${username}`);
+    // console.log(username)
   });
 
 });
 
-app.get('pages/profile', (req, res) => {
-  // Your logic to handle the /profile request goes here
-  res.render('/');
+app.get('/profile/:username', (req, res) => {
+  const username = req.params.username;
+  res.render('pages/profile', { username });
 });
-
-app.get('/successful-upload', (req, res) => {
-      // Set a custom response header to instruct the client to reload the page
-      res.setHeader('X-Reload-Page', 'true');
-});
-
 
 app.get('/logout', (req, res) => {
-    req.session = null;
-    req.logout();
-    res.redirect('/');
+  req.session = null;
+  res.redirect('/');
 })
 
+app.get('/reload', (req, res) => {
+  const data = {
+    title: 'Reloaded Page',
+    message: 'This page has been reloaded!',
+  };
 
-app.listen(5000, () => console.log(`Example app listening on port ${5000}!`))
+  res.render('reload', data);
+});
 
 
-app.use(cors());
-// Configure AWS credentials (Set these as environment variables)
+// AWS credentials
 const awsConfig = {
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: 'ap-south-1', 
+  region: 'ap-south-1',
 };
 
 AWS.config.update(awsConfig);
-
 const s3 = new AWS.S3();
+const storage = multer.memoryStorage(); // Storage destination for uploaded files
+const upload = multer({ storage }); // multer configs to handle file uploads
 
-// Set the storage destination for uploaded files
-const storage = multer.memoryStorage();
-
-// Configure multer to handle file uploads
-const upload = multer({ storage });
-
-// Handle file uploads
-app.post('/upload-to-s3', upload.single('file'), async (req, res) => {
+// File Upload To S3 Bucket
+app.post('/upload-to-s3/:username', upload.single('file'), async (req, res) => {
   try {
+
     const file = req.file;
+    const username = app.locals.username
 
     // Upload the file to AWS S3
     const params = {
-      Bucket: 'uploadonaws', // Replace with your S3 bucket name
-      Key: `${Date.now()}-${file.originalname}`,
+      Bucket: 'uploadonaws', 
+      Key: `${username}/${Date.now()}-${file.originalname}`,
       Body: file.buffer,
+      ACL: 'private',
     };
 
     const uploadedFile = await s3.upload(params).promise(); //To push file on aws
     const uploadedFiles = []; // Store the uploaded file details in an array
+    // console.log("before",uploadedFiles);
 
-    // Optionally, you can store the uploaded file details (e.g., URL, key) in your database
     uploadedFiles.push({
       name: file.originalname,
       url: uploadedFile.Location, // The URL of the uploaded file in S3
     });
-
-    
+    // console.log("after", uploadedFiles);
     // console.log('Upload Successful');
-    location.url('profile');
-    // app.get('/files', (req, res) => {
-    //   res.json(fileList);
-    // });
+    res.redirect('/reload');
 
   } catch (err) {
     console.error('Error during file upload:', err);
@@ -141,9 +114,87 @@ app.post('/upload-to-s3', upload.single('file'), async (req, res) => {
 });
 
 
+// Get Files as per User Logged-In
+app.get('/all-files/:username', (req, res) => {
+  const username = app.locals.username
+  // console.log('username is', username)
+  s3Get(req, res, username);
+});
 
-// app.post('/upload-to-s3', upload.single('file'), s3Controller.s3Upload);
+async function s3Get (req, res, username) {
+  try{
+      // console.log('received username', username)
+      const prefix = `${username}/`
+      // console.log(prefix)
+      const bucketData = await getBucketListFromS3('uploadonaws', prefix);
+      const {Contents = []} = bucketData; 
+      const files = Contents.map((content) => {
+          const keyParts = content.Key.split('/'); // Split the key by "/"
+          const filename = keyParts[keyParts.length - 1];
+          return {
+            key: content.Key,
+            filename: filename,
+            size: (content.Size / 1024).toFixed(1) + ' KB',
+            lastModified: content.LastModified,
+            owner: username
+          };
+        });
+        res.send(files);
+  } catch(ex) {
+      res.send([]);
+  }
+}
 
-app.get('/all-files', s3Controller.s3Get);
+async function getBucketListFromS3(bucketName, prefix) {
+  // const s3 = createS3Instance();
+  // console.log('prefix is', prefix)
+  const params = {
+      Bucket: bucketName,
+      MaxKeys: 10,
+      Prefix: prefix
+  }
 
-app.get('/get-object-url/:key', s3Controller.getSignedUrl);
+  try {
+      const bucketData = await s3.listObjects(params).promise();
+      // console.log("Bucket Data is", bucketData)
+      return bucketData || {};
+  } catch (err) {
+      console.error('Error listing objects:', err);
+      return {};
+  }
+}
+
+
+// Get URL To Download File
+app.get(`/get-object-url/:key`, (req, res) => {
+  const key = req.params.key
+  // console.log('KEY', key)
+  // res.setHeader('Content-Disposition', `attachment; filename="${key}"`);
+  getSignedUrl(req, res, key);
+});
+
+async function getPresignedURL(bucketName, key) {
+  const params = {
+      Bucket: bucketName,
+      Key: key,
+      Expires: 60
+  }
+  const preSignedURL = await s3.getSignedUrl('getObject', params);
+  // console.log('presigned url is', preSignedURL);
+  return preSignedURL;
+}
+
+async function getSignedUrl(req, res, key) {
+  try {
+
+      // console.log('key is', key);
+      const url = await getPresignedURL('uploadonaws', key);
+      res.send(url);
+      // console.log('url is', url);
+
+  } catch(ex) {
+      res.send('');
+  }
+}
+
+app.listen(5000, () => console.log(`App listening on port ${5000}!`))
