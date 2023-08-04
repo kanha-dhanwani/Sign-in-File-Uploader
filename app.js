@@ -14,17 +14,6 @@ app.set('view engine', 'ejs')
 app.set('views', path.join(__dirname, 'views'));
 
 
-app.use(session({
-  secret: 'your_secret_key',
-  resave: false,
-  saveUninitialized: false,
-}));
-app.use(passport.initialize());
-app.use(passport.session());
-app.use(express.static(__dirname));
-app.use(cors());
-
-
 // Example protected and unprotected routes
 app.get('/', (req, res) => res.render('pages/index'))
 
