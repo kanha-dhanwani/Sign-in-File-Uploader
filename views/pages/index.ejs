@@ -2,24 +2,70 @@
 <html>
 <head>
     <title>Google Authentication & Uploader</title>
-    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css"> <!-- load bootstrap css -->
-    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.min.css"> <!-- load fontawesome -->
     <style>
-        body        { padding-top:80px; }
+        body {
+            background: #b2c2d2;
+            font-family: Assistant, sans-serif;
+            display: flex;
+            min-height: 90vh;
+        }
+
+        .login {
+            color: white;
+            background: background #136a8a;
+            background:
+                -webkit-linear-gradient(to right, #267871, #136a8a);
+            background:
+                linear-gradient(to right, #267871, #136a8a);
+            margin: auto;
+            box-shadow:
+                0px 2px 10px rgba(0, 0, 0, 0.2),
+                0px 10px 20px rgba(0, 0, 0, 0.3),
+                0px 30px 60px 1px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 50px;
+        }
+
+        .login .head {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login .head .company {
+            font-size: 2.2em;
+        }
+
+        .login .form .btn-login {
+            background: none;
+            text-decoration: none;
+            color: white;
+            box-shadow: 0px 0px 0px 2px white;
+            border-radius: 3px;
+            padding: 5px 2em;
+            transition: 0.5s;
+        }
+
+        .login .form .btn-login:hover {
+            background: white;
+            color: dimgray;
+            transition: 0.5s;
+        }
     </style>
 </head>
 <body>
-<div class="container">
-
-    <div class="jumbotron text-center">
-        <h1><span class="fa fa-lock"></span>Google Authentication</h1>
-
-        <p>Login or Register with:</p>
-
-        <a href="/google" class="btn btn-danger"><span class="fa fa-google-plus"></span> Google</a>
-
-    </div>
-
-</div>
+    <section class='login' id='login'>
+        <div class='head'>
+            <h1 class='company'>Google Authentication</h1>
+        </div>
+        <center>
+            <h3>Login or Register with:</h3>
+            <div class='form'>
+                <form>
+                    <a href="/google" class='btn-login' id='do-login'>Google</a>
+                </form>
+            </div>
+        </center>
+    </section>
 </body>
 </html>
