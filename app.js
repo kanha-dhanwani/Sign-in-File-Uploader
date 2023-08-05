@@ -22,21 +22,6 @@ app.get('/failed', (req, res) => res.send('You Failed to log in!'))
 // Auth Routes
 app.get('/google', passport.authenticate('google', { scope: ['profile'], callbackURL: 'http://localhost:5000/google/callback' }));
 
-app.get('/google/callback', passport.authenticate('google', { failureRedirect: '/' }), async (req, res) => {
-  const username = req.user.id;
-  app.locals.username = username;
-  req.session.regenerate((err) => {
-    // Handle the regeneration callback (if needed)
-    if (err) {
-      console.error('Error regenerating session:', err);
-    }
-
-    res.redirect(`/profile/${username}`);
-    // console.log(username)
-  });
-
-});
-
 app.get('/profile/:username', (req, res) => {
   const username = req.params.username;
   res.render('pages/profile', { username });
